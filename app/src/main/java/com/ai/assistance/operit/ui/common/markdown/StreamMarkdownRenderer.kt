@@ -649,6 +649,20 @@ fun StreamMarkdownRenderer(
         } catch (e: Exception) {
             rendererState.streamParsingCompletedSuccessfully = false
             AppLogger.e(TAG, "【流渲染】Markdown流处理异常: ${e.message}", e)
+            // A malformed block produced by any model must never blank the
+            // answer. Preserve every received character as readable text.
+            val fallbackText = rendererState.collectedContent.toString()
+            if (fallbackText.isNotEmpty()) {
+                nodes.clear()
+                nodes.add(
+                    MarkdownNode(
+                        type = MarkdownProcessorType.PLAIN_TEXT,
+                        initialContent = fallbackText
+                    )
+                )
+                xmlNodeStreams.clear()
+                batchUpdater.requestStructuralUpdate()
+            }
         } finally {
             // 移除时间计算变量和日志
             synchronizeRenderNodes(
@@ -958,6 +972,17 @@ fun StreamMarkdownRenderer(
                 throw e
             } catch (e: Exception) {
                 AppLogger.e(TAG, "【静态渲染】解析Markdown内容出错: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    rendererState.replaceStaticNodes(
+                        rendererId,
+                        listOf(
+                            MarkdownNode(
+                                type = MarkdownProcessorType.PLAIN_TEXT,
+                                initialContent = content
+                            )
+                        )
+                    )
+                }
             }
         }
     }
