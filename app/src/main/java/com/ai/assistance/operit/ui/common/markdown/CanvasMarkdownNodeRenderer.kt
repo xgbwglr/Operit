@@ -528,6 +528,19 @@ private fun renderNodeContent(
     fillMaxWidth: Boolean,
     isLastNode: Boolean = false
 ) {
+    // Render GFM task lists as real Compose controls. Existing list/text
+    // rendering remains untouched for every other Markdown node.
+    val taskItem =
+        if (node.type == MarkdownProcessorType.UNORDERED_LIST) {
+            MarkdownTaskItem.parse(content)
+        } else {
+            null
+        }
+    if (taskItem != null) {
+        MarkdownTaskItemView(item = taskItem, textColor = textColor)
+        return
+    }
+
     when (node.type) {
         // ========== 简单文本类型：使用单个大 Canvas 绘制 ==========
         MarkdownProcessorType.HEADER,
