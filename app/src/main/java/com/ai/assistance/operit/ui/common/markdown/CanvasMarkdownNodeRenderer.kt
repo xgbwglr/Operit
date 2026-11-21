@@ -628,7 +628,7 @@ private fun renderNodeContent(
         MarkdownProcessorType.BLOCK_QUOTE -> {
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(4.dp)
             ) {
                 Box(
@@ -636,7 +636,7 @@ private fun renderNodeContent(
                         .fillMaxWidth()
                         .border(
                             width = 2.dp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f),
                             shape = RoundedCornerShape(4.dp)
                         )
                         .padding(4.dp)
@@ -820,6 +820,8 @@ private fun UnifiedCanvasRenderer(
     isLastNode: Boolean = false
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
     val textLayoutSettings = LocalAiMarkdownTextLayoutSettings.current
 
     val fontFamily = MaterialTheme.typography.bodyMedium.fontFamily
@@ -856,6 +858,9 @@ private fun UnifiedCanvasRenderer(
         val layoutResult = remember(
             contentKey,
             textColor,
+            primaryColor,
+            secondaryColor,
+            tertiaryColor,
             availableWidthPx,
             node.type,
             normalTypeface,
@@ -869,6 +874,8 @@ private fun UnifiedCanvasRenderer(
                 node = node,
                 textColor = textColor,
                 primaryColor = primaryColor,
+                secondaryColor = secondaryColor,
+                tertiaryColor = tertiaryColor,
                 bodyMediumSize = bodyMediumSize,
                 headlineLargeSize = headlineLargeSize,
                 headlineMediumSize = headlineMediumSize,
@@ -1222,6 +1229,8 @@ private fun calculateLayout(
     node: MarkdownNodeStable,
     textColor: Color,
     primaryColor: Color,
+    secondaryColor: Color,
+    tertiaryColor: Color,
     bodyMediumSize: TextUnit,
     headlineLargeSize: TextUnit,
     headlineMediumSize: TextUnit,
@@ -1253,6 +1262,14 @@ private fun calculateLayout(
         MarkdownProcessorType.HEADER -> {
             val level = determineHeaderLevel(content)
             val headerText = content.trimStart('#', ' ').trimAll()
+            // Distinct semantic tones follow the active Material theme:
+            // H1 = primary, H2 = secondary, H3 = tertiary, H4+ = normal text.
+            val headingColor = when (level) {
+                1 -> primaryColor
+                2 -> secondaryColor
+                3 -> tertiaryColor
+                else -> textColor
+            }
             
             // 减小标题字号：使用更小一级的字体
             val fontSize = when (level) {
@@ -1282,7 +1299,7 @@ private fun calculateLayout(
             
             val textSizePx = with(density) { fontSize.toPx() }
             val textPaint = PaintCache.getTextPaint(
-                textColor,
+                headingColor,
                 textSizePx,
                 boldTypeface,
                 calculateCanvasLetterSpacingEm(fontSize, globalLetterSpacingSp)
@@ -1299,7 +1316,7 @@ private fun calculateLayout(
                 createSafeInlineStaticLayout(
                     children = modifiedChildren,
                     fallbackText = headerText,
-                    textColor = textColor,
+                    textColor = headingColor,
                     primaryColor = primaryColor,
                     density = density,
                     fontSize = fontSize,
@@ -1313,7 +1330,7 @@ private fun calculateLayout(
                     headerText,
                     textPaint,
                     safeAvailableWidthPx,
-                    textColor,
+                    headingColor,
                     boldTypeface,
                     lineSpacingMultiplier
                 )
