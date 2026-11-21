@@ -43,35 +43,67 @@ internal object SafeSvgMarkup {
         """(?i)url\s*\(\s*['"]?\s*(?:https?:|//|file:|content:|javascript:)"""
     )
 
-    fun validated(svg: String): String? {
-        if (svg.isBlank() || svg.length > MAX_SVG_CHARACTERS) return null
-        val cleaned = svg.replaceFirst(xmlDeclaration, "").trim()
-        if (!cleaned.startsWith("<svg", ignoreCase = true)) return null
+    internal data class Validation(val markup: String?, val reason: String? = null)
+
+    // Preserve the old API for existing call sites and tests.
+    fun validated(svg: String): String? = inspect(svg).markup
+
+    fun inspect(svg: String): Validation {
+        if (svg.isBlank()) return Validation(null, "没有找到 SVG 代码")
+        if (svg.length > MAX_SVG_CHARACTERS) {
+            return Validation(null, "SVG 内容过长（超过 20 万字符）")
+        }
+
+        val cleaned = svg.trim().removePrefix("\uFEFF")
+            .replaceFirst(xmlDeclaration, "").trim()
+
+        // Allow harmless XML comments before the root <svg> element.
+        // The DOM check below remains authoritative, not this preflight test.
+        if (!Regex("""(?i)<svg(?=\s|/|>)""").containsMatchIn(cleaned)) {
+            return Validation(null, "代码中没有 <svg> 根元素")
+        }
         if (cleaned.contains("<!DOCTYPE", ignoreCase = true) ||
             cleaned.contains("<!ENTITY", ignoreCase = true) ||
-            externalCssUrl.containsMatchIn(cleaned)
-        ) return null
+            cleaned.contains("<?xml-stylesheet", ignoreCase = true)
+        ) {
+            return Validation(null, "SVG 使用了不允许的 DTD、实体或外部样式")
+        }
+        if (externalCssUrl.containsMatchIn(cleaned)) {
+            return Validation(null, "SVG 引用了不允许的外部资源")
+        }
 
-        return runCatching {
+        return try {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 isNamespaceAware = true
                 isExpandEntityReferences = false
-                isXIncludeAware = false
-                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                setFeature("http://xml.org/sax/features/external-general-entities", false)
-                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+                // Android's standard DocumentBuilderFactory does NOT support
+                // Xerces-only setFeature() calls (e.g. disallow-doctype-decl).
+                // Calling them throws ParserConfigurationException and caused
+                // every valid SVG to show "preview unavailable" on devices.
+                //
+                // For security we reject all DTDs before parsing, provide an
+                // empty entity resolver, validate the DOM, and prevent WebView
+                // network/file/content access and JavaScript execution.
             }
             val parser = factory.newDocumentBuilder().apply {
                 setEntityResolver { _, _ -> InputSource(StringReader("")) }
             }
             val document = parser.parse(InputSource(StringReader(cleaned)))
-            val root = document.documentElement ?: return null
+            val root = document.documentElement
+                ?: return Validation(null, "SVG XML 没有根节点")
             if (!root.localName.orEmpty().equals("svg", ignoreCase = true) &&
                 !root.nodeName.equals("svg", ignoreCase = true)
-            ) return null
-            if (isUnsafeNode(root)) null else cleaned
-        }.getOrNull()
+            ) {
+                return Validation(null, "XML 根节点不是 <svg>")
+            }
+            if (isUnsafeNode(root)) {
+                Validation(null, "包含脚本、事件、外部链接或其他不安全元素")
+            } else {
+                Validation(cleaned)
+            }
+        } catch (e: Exception) {
+            Validation(null, "SVG XML 语法错误、标签未闭合或格式不完整")
+        }
     }
 
     private fun isUnsafeNode(node: Node): Boolean {
@@ -106,11 +138,12 @@ internal object SafeSvgMarkup {
 @Composable
 internal fun SvgPreviewRenderer(code: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val validatedMarkup = remember(code) { SafeSvgMarkup.validated(code) }
+    val validation = remember(code) { SafeSvgMarkup.inspect(code) }
+    val validatedMarkup = validation.markup
 
     if (validatedMarkup == null) {
         Text(
-            text = "SVG 预览不可用：图形尚未完整生成，或包含不安全内容。可以切回代码查看原文。",
+            text = "SVG 预览不可用：${validation.reason ?: "未知错误"}。请切回代码查看原文。",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
             modifier = modifier
