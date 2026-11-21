@@ -1334,7 +1334,8 @@ private fun calculateLayout(
                 itemContent.substring(startIndex)
             } ?: itemContent
             
-            val startPadding = 4f * density.density
+            val listLevel = MarkdownListIndentation.level(content)
+            val startPadding = (4f + listLevel * 16f) * density.density
             val markerEndPadding = 4f * density.density
             
             val textSizePx = with(density) { bodyMediumSize.toPx() }
@@ -1368,10 +1369,11 @@ private fun calculateLayout(
                 // 处理子节点列表，去除第一个子节点中的列表标记
                 val modifiedChildren = node.children.toMutableList()
                 val firstChild = modifiedChildren[0]
+                val rawFirstChild = MarkdownListIndentation.stripLeadingIndent(firstChild.content)
                 val newContent = numberMatch?.let {
-                val startIndex = (it.range.last + 1).coerceAtMost(firstChild.content.length)
-                firstChild.content.substring(startIndex)
-            } ?: firstChild.content
+                val startIndex = (it.range.last + 1).coerceAtMost(rawFirstChild.length)
+                rawFirstChild.substring(startIndex)
+            } ?: rawFirstChild
                 val newFirstChild = MarkdownNodeStable(firstChild.type, content = newContent, children = firstChild.children)
                 modifiedChildren[0] = newFirstChild
 
@@ -1422,7 +1424,8 @@ private fun calculateLayout(
                 itemContent.substring(startIndex)
             } ?: itemContent
             
-            val startPadding = 4f * density.density
+            val listLevel = MarkdownListIndentation.level(content)
+            val startPadding = (4f + listLevel * 16f) * density.density
             val markerEndPadding = 4f * density.density
             
             val textSizePx = with(density) { bodyMediumSize.toPx() }
@@ -1445,10 +1448,11 @@ private fun calculateLayout(
                 // 处理子节点列表，去除第一个子节点中的列表标记
                 val modifiedChildren = node.children.toMutableList()
                 val firstChild = modifiedChildren[0]
+                val rawFirstChild = MarkdownListIndentation.stripLeadingIndent(firstChild.content)
                 val newContent = markerMatch?.let {
-                val startIndex = (it.range.last + 1).coerceAtMost(firstChild.content.length)
-                firstChild.content.substring(startIndex)
-            } ?: firstChild.content
+                val startIndex = (it.range.last + 1).coerceAtMost(rawFirstChild.length)
+                rawFirstChild.substring(startIndex)
+            } ?: rawFirstChild
                 val newFirstChild = MarkdownNodeStable(firstChild.type, content = newContent, children = firstChild.children)
                 modifiedChildren[0] = newFirstChild
 
