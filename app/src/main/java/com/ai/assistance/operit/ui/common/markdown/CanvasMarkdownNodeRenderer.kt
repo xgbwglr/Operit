@@ -537,7 +537,11 @@ private fun renderNodeContent(
             null
         }
     if (taskItem != null) {
-        MarkdownTaskItemView(item = taskItem, textColor = textColor)
+        MarkdownTaskItemView(
+            item = taskItem,
+            textColor = textColor,
+            level = MarkdownListIndentation.level(content)
+        )
         return
     }
 
