@@ -668,13 +668,23 @@ private fun renderNodeContent(
         
         // ========== XML块：保留原组件 ==========
         MarkdownProcessorType.XML_BLOCK -> {
-            xmlRenderer.RenderXmlContent(
-                xmlContent = content,
-                modifier = Modifier.fillMaxWidth(),
-                textColor = textColor,
-                xmlStream = xmlStream,
-                renderInstanceKey = nodeKey
-            )
+            // Native XML-block messages can also contain a standalone SVG.
+            // Give valid SVG its own safe offline preview; all existing
+            // Operit XML tool components continue through their old renderer.
+            if (content.trimStart().startsWith("<svg", ignoreCase = true)) {
+                SvgPreviewRenderer(
+                    code = content,
+                    modifier = Modifier.fillMaxWidth().height(280.dp)
+                )
+            } else {
+                xmlRenderer.RenderXmlContent(
+                    xmlContent = content,
+                    modifier = Modifier.fillMaxWidth(),
+                    textColor = textColor,
+                    xmlStream = xmlStream,
+                    renderInstanceKey = nodeKey
+                )
+            }
         }
         
         // ========== 图片：保留原组件 ==========
