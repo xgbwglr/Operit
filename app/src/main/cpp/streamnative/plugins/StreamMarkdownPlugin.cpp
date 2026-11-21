@@ -630,6 +630,7 @@ bool StreamMarkdownOrderedListPlugin::initPlugin() {
 void StreamMarkdownOrderedListPlugin::reset() {
     state_ = PluginState::IDLE;
     matchState_ = 0;
+    indentation_ = 0;
 }
 
 bool StreamMarkdownOrderedListPlugin::processChar(char16_t c, bool atStartOfLine) {
@@ -643,10 +644,22 @@ bool StreamMarkdownOrderedListPlugin::processChar(char16_t c, bool atStartOfLine
     if (atStartOfLine) {
         // start matching
         matchState_ = 0;
+        indentation_ = 0;
         state_ = PluginState::IDLE;
     }
 
     if (!atStartOfLine && state_ != PluginState::TRYING) {
+        return true;
+    }
+
+    // Preserve indentation in a nested list item without treating ordinary
+    // indented paragraphs as lists. The subsequent marker is still required.
+    if (matchState_ == 0 && c == u' ') {
+        if (++indentation_ > 7) {
+            reset();
+            return true;
+        }
+        state_ = PluginState::TRYING;
         return true;
     }
 
@@ -705,6 +718,7 @@ bool StreamMarkdownUnorderedListPlugin::initPlugin() {
 void StreamMarkdownUnorderedListPlugin::reset() {
     state_ = PluginState::IDLE;
     matchState_ = 0;
+    indentation_ = 0;
 }
 
 bool StreamMarkdownUnorderedListPlugin::processChar(char16_t c, bool atStartOfLine) {
@@ -717,10 +731,22 @@ bool StreamMarkdownUnorderedListPlugin::processChar(char16_t c, bool atStartOfLi
 
     if (atStartOfLine) {
         matchState_ = 0;
+        indentation_ = 0;
         state_ = PluginState::IDLE;
     }
 
     if (!atStartOfLine && state_ != PluginState::TRYING) {
+        return true;
+    }
+
+    // Preserve leading indentation for renderer nesting depth. The list
+    // marker itself continues to follow the existing includeMarker_ setting.
+    if (matchState_ == 0 && c == u' ') {
+        if (++indentation_ > 7) {
+            reset();
+            return true;
+        }
+        state_ = PluginState::TRYING;
         return true;
     }
 
