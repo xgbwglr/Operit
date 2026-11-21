@@ -57,6 +57,7 @@ import com.ai.assistance.operit.ui.common.displays.LatexCache
 import com.ai.assistance.operit.util.markdown.MarkdownNode
 import com.ai.assistance.operit.util.markdown.MarkdownNodeStable
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
+import com.ai.assistance.operit.util.markdown.UniversalMarkdownCompatibility
 import com.ai.assistance.operit.util.markdown.SmartString
 import com.ai.assistance.operit.util.stream.Stream
 import com.ai.assistance.operit.util.stream.StreamInterceptor
@@ -885,6 +886,11 @@ fun StreamMarkdownRenderer(
         enableDialogs: Boolean = true,
         fillMaxWidth: Boolean = true,
 ) {
+    // Only normalize completed assistant text. Streaming keeps its existing native
+    // incremental parser; raw ChatMessage.content is never modified.
+    val compatibleContent = remember(content) {
+        UniversalMarkdownCompatibility.normalize(content)
+    }
     // 使用流式版本相同的渲染器ID生成逻辑
     val rendererId = remember(content) { "static-renderer-${content.hashCode()}" }
 
@@ -916,7 +922,8 @@ fun StreamMarkdownRenderer(
         val collectedContentStr = rendererState.collectedContent.toString()
         val streamParsingCompleted = rendererState.streamParsingCompletedSuccessfully
         val shouldReuseExistingNodes =
-            collectedContentStr == content &&
+            compatibleContent == content &&
+                collectedContentStr == content &&
                 areRenderNodesSynchronized(nodes, renderNodes) &&
                 streamParsingCompleted
 
@@ -938,7 +945,7 @@ fun StreamMarkdownRenderer(
 
         launch(Dispatchers.IO) {
             try {
-                val parsedNodes = parseMarkdownToNodes(content)
+                val parsedNodes = parseMarkdownToNodes(compatibleContent)
 
                 // 将解析完成的节点添加到节点列表，并更新动画状态
                 withContext(Dispatchers.Main) {
