@@ -141,6 +141,7 @@ private:
     bool includeMarker_;
     PluginState state_;
     int matchState_;
+    int indentation_ = 0;
 };
 
 class StreamMarkdownUnorderedListPlugin final : public StreamPlugin {
@@ -155,6 +156,7 @@ private:
     bool includeMarker_;
     PluginState state_;
     int matchState_;
+    int indentation_ = 0;
 };
 
 class StreamMarkdownStrikethroughPlugin final : public StreamPlugin {
