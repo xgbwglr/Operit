@@ -14,7 +14,7 @@ on:
           - ':app:assembleClone'
           - ':app:bundleRelease'
   push:
-    branches: [main]
+    branches: [main, feat/universal-richtext-compat]
     paths:
       - .github/workflows/android-build.yml
       - .gitmodules
