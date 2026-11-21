@@ -5,6 +5,10 @@ This branch modifies the **existing Operit Android app**, not a separate AI Shel
 ## Current implementation
 
 - Provider-independent normalization of GFM tables without boundary pipes.
+- Semantic, theme-aware heading colors (H1/H2/H3), distinct quote highlights, and level-colored bullet/numbered list markers.
+- Built-in SVG drawing preview for AI-generated `svg` fenced code blocks, with preview toggle and fullscreen mode.
+- SVG diagrams may be saved as real UTF-8 `.svg` files using the existing code export action.
+- A restrictive SVG validator rejects scripts, event handlers, foreign HTML objects, external links and malformed markup; JavaScript/network/file access are disabled in the preview WebView.
 - Support for tilde fenced-code blocks in completed messages.
 - Stable code fence extraction, preserving inner fences and incomplete streams.
 - Real UTF-8 code-file export via the Android document picker, available from code block toolbar where an activity is present.
@@ -14,6 +18,8 @@ This branch modifies the **existing Operit Android app**, not a separate AI Shel
 
 Current limits:
 - Full CommonMark/GFM parity, persisted task checkbox state, advanced chart cards and automatic workspace artifact discovery are not yet implemented.
+- Color distinctions follow the current Material theme; a user-facing custom color picker has not been implemented.
+- SVG support is a visual preview of supplied SVG markup, not an interactive SVG editor.
 - The new GFM compatibility transform runs for completed messages, not while tokens are still streaming.
 - All changes are in the fork's `feat/universal-richtext-compat` branch; the default branch is unchanged.
 
@@ -42,6 +48,8 @@ Ask at least two models (e.g. Gemini and DeepSeek or Claude and Qwen) to output:
 - A Mermaid code block, then render and switch back to source.
 - A large response; compare behavior during streaming and after completion.
 - Export generated code using the file button, then open the saved file.
+- Ask a model to produce a standalone `svg` code block with a colored chart, preview the graphic, enter fullscreen and export as `.svg`.
+- Check that H1/H2/H3, quote borders and list bullets use distinct theme colors.
 - Reopen the conversation and confirm the original Markdown is unchanged.
 
 Do not install an unverified release APK over your official installation. The debug build is meant for safe, side-by-side testing.
