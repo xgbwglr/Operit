@@ -44,10 +44,10 @@ internal data class MarkdownTaskItem(val checked: Boolean, val label: String) {
  * Rendering is identical regardless of provider.
  */
 @Composable
-internal fun MarkdownTaskItemView(item: MarkdownTaskItem, textColor: Color) {
+internal fun MarkdownTaskItemView(item: MarkdownTaskItem, textColor: Color, level: Int = 0) {
     var selected by remember(item) { mutableStateOf(item.checked) }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = (level * 16).dp).padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
