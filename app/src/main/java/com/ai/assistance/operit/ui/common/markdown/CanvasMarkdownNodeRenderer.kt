@@ -1370,7 +1370,13 @@ private fun calculateLayout(
             val markerEndPadding = 4f * density.density
             
             val textSizePx = with(density) { bodyMediumSize.toPx() }
-            val boldPaint = PaintCache.getPaint(textColor, textSizePx, boldTypeface)
+            val markerTint = when (listLevel) {
+                0 -> primaryColor
+                1 -> secondaryColor
+                2 -> tertiaryColor
+                else -> textColor
+            }
+            val boldPaint = PaintCache.getPaint(markerTint, textSizePx, boldTypeface)
             val textPaint = PaintCache.getTextPaint(
                 textColor,
                 textSizePx,
@@ -1466,7 +1472,13 @@ private fun calculateLayout(
                 normalTypeface,
                 calculateCanvasLetterSpacingEm(bodyMediumSize, globalLetterSpacingSp)
             )
-            val markerPaint = PaintCache.getPaint(textColor, textSizePx, normalTypeface)
+            val markerTint = when (listLevel) {
+                0 -> primaryColor
+                1 -> secondaryColor
+                2 -> tertiaryColor
+                else -> textColor
+            }
+            val markerPaint = PaintCache.getPaint(markerTint, textSizePx, normalTypeface)
             
             // 测量标记宽度
             val markerWidth = markerPaint.measureText("•")
