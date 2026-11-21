@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.util.stream.plugins
 
+import com.ai.assistance.operit.util.stream.PluginState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
