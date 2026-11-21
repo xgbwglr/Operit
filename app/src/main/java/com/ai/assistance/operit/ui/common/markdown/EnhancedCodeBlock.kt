@@ -45,7 +45,8 @@ import kotlinx.coroutines.launch
 
 private enum class CodeBlockPreviewType {
     MERMAID,
-    HTML
+    HTML,
+    SVG
 }
 
 /**
@@ -106,6 +107,7 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
             "sql" -> "sql"
             "markdown", "md" -> "md"
             "mermaid" -> "mmd"
+            "svg" -> "svg"
             "sh", "bash", "shell" -> "sh"
             "rust", "rs" -> "rs"
             "go" -> "go"
@@ -125,11 +127,15 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
     // 检测是否为HTML代码
     val isHtml = language.equals("html", ignoreCase = true) || language.equals("htm", ignoreCase = true)
 
+    // A standard svg fenced block works for every AI provider.
+    val isSvg = language.equals("svg", ignoreCase = true) || language.equals("image/svg+xml", ignoreCase = true)
+
     // Mermaid渲染状态
     var showRenderedMermaid by remember { mutableStateOf(false) }
 
     // HTML预览状态
     var showRenderedHtml by remember { mutableStateOf(false) }
+    var showRenderedSvg by remember { mutableStateOf(false) }
 
     var showFullscreenPreview by remember { mutableStateOf(false) }
     var fullscreenPreviewType by remember { mutableStateOf<CodeBlockPreviewType?>(null) }
@@ -139,7 +145,10 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
         (configuration.screenHeightDp.dp * 0.5f).coerceIn(240.dp, 560.dp)
     }
 
-    val isPreviewMode = (isMermaid && showRenderedMermaid) || (isHtml && showRenderedHtml)
+    val isPreviewMode =
+        (isMermaid && showRenderedMermaid) ||
+        (isHtml && showRenderedHtml) ||
+        (isSvg && showRenderedSvg)
 
     // 处理复制事件
     val handleCopy: () -> Unit = {
@@ -156,6 +165,9 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
 
     // 处理HTML预览切换
     val handleToggleHtml: () -> Unit = { showRenderedHtml = !showRenderedHtml }
+
+    // Preview safe inline SVG locally without executing model-supplied scripts.
+    val handleToggleSvg: () -> Unit = { showRenderedSvg = !showRenderedSvg }
 
     // 暗色代码块背景颜色
     val codeBlockBackground = Color(0xFF1E1E1E) // VS Code 暗色主题背景色
@@ -265,6 +277,30 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
                         }
                     }
 
+                    // Render the SVG supplied by any model using the same
+                    // code-fence conventions as Mermaid and HTML.
+                    if (isSvg) {
+                        IconButton(
+                            onClick = handleToggleSvg,
+                            modifier = Modifier.size(28.dp),
+                            enabled = !preferStreamingBody,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription =
+                                    if (showRenderedSvg) "显示 SVG 源码" else "预览 SVG 图形",
+                                tint = if (preferStreamingBody) {
+                                    Color(0xFF666666)
+                                } else if (showRenderedSvg) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    Color(0xFFAAAAAA)
+                                },
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
                     if (isPreviewMode) {
                         IconButton(
                             onClick = {
@@ -272,6 +308,7 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
                                     when {
                                         isMermaid && showRenderedMermaid -> CodeBlockPreviewType.MERMAID
                                         isHtml && showRenderedHtml -> CodeBlockPreviewType.HTML
+                                        isSvg && showRenderedSvg -> CodeBlockPreviewType.SVG
                                         else -> null
                                     }
                                 if (fullscreenPreviewType != null) {
@@ -344,6 +381,11 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
                         .fillMaxWidth()
                         .height(360.dp)
                 )
+            } else if (isSvg && showRenderedSvg) {
+                SvgPreviewRenderer(
+                    code = code,
+                    modifier = Modifier.fillMaxWidth().height(320.dp)
+                )
             } else {
                 CanvasMonospaceCodeBlockBody(
                     code = code,
@@ -385,6 +427,7 @@ fun EnhancedCodeBlock(code: String, language: String = "", modifier: Modifier = 
                     when (fullscreenPreviewType) {
                         CodeBlockPreviewType.MERMAID -> MermaidRenderer(code = code, modifier = Modifier.fillMaxSize())
                         CodeBlockPreviewType.HTML -> HtmlPreviewRenderer(code = code, modifier = Modifier.fillMaxSize())
+                        CodeBlockPreviewType.SVG -> SvgPreviewRenderer(code = code, modifier = Modifier.fillMaxSize())
                         null -> Unit
                     }
 
