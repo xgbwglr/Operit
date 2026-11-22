@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "toolpkg_id": "com.operit.universal_richtext",
+  "version": "1.0.0",
+  "api_version": "1.0.0",
+  "main": "main.js",
+  "display_name": {
+    "zh": "通用富文本规范",
+    "en": "Universal RichText"
+  },
+  "description": {
+    "zh": "为所有通过 Operit 统一系统提示词流程的模型注入标准 Markdown、LaTeX、Mermaid 和安全 SVG 输出规范，并提供聊天输入菜单开关。",
+    "en": "Injects provider-neutral Markdown, LaTeX, Mermaid, and safe SVG output guidance into Operit's shared system prompt pipeline, with a chat input toggle."
+  },
+  "enabled_by_default": true,
+  "subpackages": [],
+  "resources": []
+}
