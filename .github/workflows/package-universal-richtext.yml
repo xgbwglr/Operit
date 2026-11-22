@@ -1,0 +1,39 @@
+name: Package Universal RichText ToolPkg
+
+on:
+  push:
+    branches:
+      - feat/universal-richtext-compat
+    paths:
+      - "examples/universal_richtext/**"
+      - ".github/workflows/package-universal-richtext.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Run ToolPkg tests
+        run: node --test examples/universal_richtext/tests/plugin.test.cjs
+
+      - name: Build ToolPkg archive
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cd "$GITHUB_WORKSPACE/examples/universal_richtext"
+          zip -X -r "$GITHUB_WORKSPACE/dist/universal-richtext.toolpkg" manifest.json main.js README.md
+          unzip -t "$GITHUB_WORKSPACE/dist/universal-richtext.toolpkg"
+
+      - name: Upload ToolPkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-richtext-toolpkg
+          path: dist/universal-richtext.toolpkg
+          if-no-files-found: error
+          retention-days: 30

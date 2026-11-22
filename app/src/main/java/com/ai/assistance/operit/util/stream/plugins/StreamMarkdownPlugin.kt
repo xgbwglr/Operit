@@ -966,135 +966,119 @@ class StreamMarkdownOrderedListPlugin(private val includeMarker: Boolean = true)
     override var state: PluginState = PluginState.IDLE
         private set
 
-    private val listMatcher =
-            StreamKmpGraphBuilder()
-                    .build(
-                            kmpPattern {
-                                digit() // 至少一个数字
-                                greedyStar { digit() }
-                                char('.')
-                                char(' ')
-                            }
-                    )
+    // Keep in sync with the native C++ plugin (including leading list indentation).
+    private var matchState = 0
+    private var indentation = 0
 
     override fun processChar(c: Char, atStartOfLine: Boolean): Boolean {
         if (state == PluginState.PROCESSING) {
-            if (c == '\n') {
-                reset()
-            }
+            if (c == '\n') reset()
             return true
         }
 
-        if (atStartOfLine) {
-            return handleMatch(c)
-        } else if (state == PluginState.TRYING) {
-            return handleMatch(c)
+        if (atStartOfLine) reset()
+        if (!atStartOfLine && state != PluginState.TRYING) return true
+
+        if (matchState == 0 && c == ' ') {
+            if (++indentation > 7) {
+                reset()
+                return true
+            }
+            state = PluginState.TRYING
+            return true
         }
 
-        return true
-    }
-
-    private fun handleMatch(c: Char): Boolean {
-        return when (val result = listMatcher.processChar(c)) {
-            is StreamKmpMatchResult.Match -> {
-                state = PluginState.PROCESSING
-                includeMarker
-            }
-            is StreamKmpMatchResult.InProgress -> {
+        when (matchState) {
+            0 -> if (c.isDigit()) {
+                matchState = 1
                 state = PluginState.TRYING
-                includeMarker
+                return includeMarker
             }
-            is StreamKmpMatchResult.NoMatch -> {
-                resetInternal()
-                true
+            1 -> {
+                if (c.isDigit()) {
+                    state = PluginState.TRYING
+                    return includeMarker
+                }
+                if (c == '.') {
+                    matchState = 2
+                    state = PluginState.TRYING
+                    return includeMarker
+                }
+            }
+            2 -> if (c == ' ') {
+                matchState = 0
+                state = PluginState.PROCESSING
+                return includeMarker
             }
         }
+        reset()
+        return true
     }
 
     override fun initPlugin(): Boolean {
         reset()
         return true
     }
-
     override fun destroy() {}
-
     override fun reset() {
-        resetInternal()
-    }
-
-    private fun resetInternal() {
         state = PluginState.IDLE
-        listMatcher.reset()
+        matchState = 0
+        indentation = 0
     }
 }
 
 /**
- * A stream plugin for identifying Markdown unordered lists (lines starting with *, - or + followed
- * by a space).
- *
- * @param includeMarker If true, includes the list marker (e.g., "* ") in the output.
+ * A stream plugin for identifying unordered lists. Leading spaces are retained
+ * as layout metadata, even when the marker itself is excluded from the stream.
  */
 class StreamMarkdownUnorderedListPlugin(private val includeMarker: Boolean = true) : StreamPlugin {
     override var state: PluginState = PluginState.IDLE
         private set
 
-    private val listMatcher =
-            StreamKmpGraphBuilder()
-                    .build(
-                            kmpPattern {
-                                anyOf('-', '+', '*')
-                                char(' ')
-                            }
-                    )
+    private var matchState = 0
+    private var indentation = 0
 
     override fun processChar(c: Char, atStartOfLine: Boolean): Boolean {
         if (state == PluginState.PROCESSING) {
-            if (c == '\n') {
-                reset()
-            }
+            if (c == '\n') reset()
             return true
         }
 
-        if (atStartOfLine) {
-            return handleMatch(c)
-        } else if (state == PluginState.TRYING) {
-            return handleMatch(c)
+        if (atStartOfLine) reset()
+        if (!atStartOfLine && state != PluginState.TRYING) return true
+
+        if (matchState == 0 && c == ' ') {
+            if (++indentation > 7) {
+                reset()
+                return true
+            }
+            state = PluginState.TRYING
+            return true
         }
 
+        if (matchState == 0 && c in listOf('-', '+', '*')) {
+            matchState = 1
+            state = PluginState.TRYING
+            return includeMarker
+        }
+        if (matchState == 1 && c == ' ') {
+            matchState = 0
+            state = PluginState.PROCESSING
+            return includeMarker
+        }
+        reset()
         return true
-    }
-
-    private fun handleMatch(c: Char): Boolean {
-        return when (val result = listMatcher.processChar(c)) {
-            is StreamKmpMatchResult.Match -> {
-                state = PluginState.PROCESSING
-                includeMarker
-            }
-            is StreamKmpMatchResult.InProgress -> {
-                state = PluginState.TRYING
-                includeMarker
-            }
-            is StreamKmpMatchResult.NoMatch -> {
-                resetInternal()
-                true
-            }
-        }
     }
 
     override fun initPlugin(): Boolean {
         reset()
         return true
     }
-
     override fun destroy() {}
-
     override fun reset() {
-        resetInternal()
-    }
-
-    private fun resetInternal() {
         state = PluginState.IDLE
-        listMatcher.reset()
+        matchState = 0
+        indentation = 0
     }
 }
 

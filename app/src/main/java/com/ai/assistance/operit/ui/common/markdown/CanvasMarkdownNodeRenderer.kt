@@ -528,6 +528,23 @@ private fun renderNodeContent(
     fillMaxWidth: Boolean,
     isLastNode: Boolean = false
 ) {
+    // Render GFM task lists as real Compose controls. Existing list/text
+    // rendering remains untouched for every other Markdown node.
+    val taskItem =
+        if (node.type == MarkdownProcessorType.UNORDERED_LIST) {
+            MarkdownTaskItem.parse(content)
+        } else {
+            null
+        }
+    if (taskItem != null) {
+        MarkdownTaskItemView(
+            item = taskItem,
+            textColor = textColor,
+            level = MarkdownListIndentation.level(content)
+        )
+        return
+    }
+
     when (node.type) {
         // ========== 简单文本类型：使用单个大 Canvas 绘制 ==========
         MarkdownProcessorType.HEADER,
@@ -585,26 +602,17 @@ private fun renderNodeContent(
         
         // ========== 代码块：保留原组件 ==========
         MarkdownProcessorType.CODE_BLOCK -> {
-            val codeLines = content.trimAll().lines()
-            val firstLine = codeLines.firstOrNull() ?: ""
-            val language = if (firstLine.startsWith("```")) {
-                firstLine.removePrefix("```").trim()
-            } else ""
-            
-            val codeContent = codeLines
-                .dropWhile { it.startsWith("```") }
-                .dropLastWhile { it.endsWith("```") }
-                .joinToString("\n")
-            
-            // 不使用 key()，让 Compose 根据位置自然识别组件
-            // 这样可以保留内部状态（如"已复制"提示、Mermaid 渲染状态）
+            val parsed = remember(content) { CodeFenceContent.parse(content) }
+
+            // Keep the code block alive across streaming updates, preserving
+            // copy feedback, Mermaid preview and horizontal scrolling.
             EnhancedCodeBlock(
-                code = codeContent,
-                language = language,
+                code = parsed.code,
+                language = parsed.language,
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        
+
         // ========== 表格：保留原组件 ==========
         MarkdownProcessorType.TABLE -> {
             // 不使用 key()，让 Compose 根据位置自然识别组件
@@ -620,7 +628,7 @@ private fun renderNodeContent(
         MarkdownProcessorType.BLOCK_QUOTE -> {
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(4.dp)
             ) {
                 Box(
@@ -628,7 +636,7 @@ private fun renderNodeContent(
                         .fillMaxWidth()
                         .border(
                             width = 2.dp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f),
                             shape = RoundedCornerShape(4.dp)
                         )
                         .padding(4.dp)
@@ -660,13 +668,23 @@ private fun renderNodeContent(
         
         // ========== XML块：保留原组件 ==========
         MarkdownProcessorType.XML_BLOCK -> {
-            xmlRenderer.RenderXmlContent(
-                xmlContent = content,
-                modifier = Modifier.fillMaxWidth(),
-                textColor = textColor,
-                xmlStream = xmlStream,
-                renderInstanceKey = nodeKey
-            )
+            // Native XML-block messages can also contain a standalone SVG.
+            // Give valid SVG its own safe offline preview; all existing
+            // Operit XML tool components continue through their old renderer.
+            if (content.trimStart().startsWith("<svg", ignoreCase = true)) {
+                SvgPreviewRenderer(
+                    code = content,
+                    modifier = Modifier.fillMaxWidth().height(280.dp)
+                )
+            } else {
+                xmlRenderer.RenderXmlContent(
+                    xmlContent = content,
+                    modifier = Modifier.fillMaxWidth(),
+                    textColor = textColor,
+                    xmlStream = xmlStream,
+                    renderInstanceKey = nodeKey
+                )
+            }
         }
         
         // ========== 图片：保留原组件 ==========
@@ -812,6 +830,8 @@ private fun UnifiedCanvasRenderer(
     isLastNode: Boolean = false
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
     val textLayoutSettings = LocalAiMarkdownTextLayoutSettings.current
 
     val fontFamily = MaterialTheme.typography.bodyMedium.fontFamily
@@ -848,6 +868,9 @@ private fun UnifiedCanvasRenderer(
         val layoutResult = remember(
             contentKey,
             textColor,
+            primaryColor,
+            secondaryColor,
+            tertiaryColor,
             availableWidthPx,
             node.type,
             normalTypeface,
@@ -861,6 +884,8 @@ private fun UnifiedCanvasRenderer(
                 node = node,
                 textColor = textColor,
                 primaryColor = primaryColor,
+                secondaryColor = secondaryColor,
+                tertiaryColor = tertiaryColor,
                 bodyMediumSize = bodyMediumSize,
                 headlineLargeSize = headlineLargeSize,
                 headlineMediumSize = headlineMediumSize,
@@ -1214,6 +1239,8 @@ private fun calculateLayout(
     node: MarkdownNodeStable,
     textColor: Color,
     primaryColor: Color,
+    secondaryColor: Color,
+    tertiaryColor: Color,
     bodyMediumSize: TextUnit,
     headlineLargeSize: TextUnit,
     headlineMediumSize: TextUnit,
@@ -1245,6 +1272,14 @@ private fun calculateLayout(
         MarkdownProcessorType.HEADER -> {
             val level = determineHeaderLevel(content)
             val headerText = content.trimStart('#', ' ').trimAll()
+            // Distinct semantic tones follow the active Material theme:
+            // H1 = primary, H2 = secondary, H3 = tertiary, H4+ = normal text.
+            val headingColor = when (level) {
+                1 -> primaryColor
+                2 -> secondaryColor
+                3 -> tertiaryColor
+                else -> textColor
+            }
             
             // 减小标题字号：使用更小一级的字体
             val fontSize = when (level) {
@@ -1274,7 +1309,7 @@ private fun calculateLayout(
             
             val textSizePx = with(density) { fontSize.toPx() }
             val textPaint = PaintCache.getTextPaint(
-                textColor,
+                headingColor,
                 textSizePx,
                 boldTypeface,
                 calculateCanvasLetterSpacingEm(fontSize, globalLetterSpacingSp)
@@ -1291,7 +1326,7 @@ private fun calculateLayout(
                 createSafeInlineStaticLayout(
                     children = modifiedChildren,
                     fallbackText = headerText,
-                    textColor = textColor,
+                    textColor = headingColor,
                     primaryColor = primaryColor,
                     density = density,
                     fontSize = fontSize,
@@ -1305,7 +1340,7 @@ private fun calculateLayout(
                     headerText,
                     textPaint,
                     safeAvailableWidthPx,
-                    textColor,
+                    headingColor,
                     boldTypeface,
                     lineSpacingMultiplier
                 )
@@ -1330,11 +1365,18 @@ private fun calculateLayout(
                 itemContent.substring(startIndex)
             } ?: itemContent
             
-            val startPadding = 4f * density.density
+            val listLevel = MarkdownListIndentation.level(content)
+            val startPadding = (4f + listLevel * 16f) * density.density
             val markerEndPadding = 4f * density.density
             
             val textSizePx = with(density) { bodyMediumSize.toPx() }
-            val boldPaint = PaintCache.getPaint(textColor, textSizePx, boldTypeface)
+            val markerTint = when (listLevel) {
+                0 -> primaryColor
+                1 -> secondaryColor
+                2 -> tertiaryColor
+                else -> textColor
+            }
+            val boldPaint = PaintCache.getPaint(markerTint, textSizePx, boldTypeface)
             val textPaint = PaintCache.getTextPaint(
                 textColor,
                 textSizePx,
@@ -1364,10 +1406,11 @@ private fun calculateLayout(
                 // 处理子节点列表，去除第一个子节点中的列表标记
                 val modifiedChildren = node.children.toMutableList()
                 val firstChild = modifiedChildren[0]
+                val rawFirstChild = MarkdownListIndentation.stripLeadingIndent(firstChild.content)
                 val newContent = numberMatch?.let {
-                val startIndex = (it.range.last + 1).coerceAtMost(firstChild.content.length)
-                firstChild.content.substring(startIndex)
-            } ?: firstChild.content
+                val startIndex = (it.range.last + 1).coerceAtMost(rawFirstChild.length)
+                rawFirstChild.substring(startIndex)
+            } ?: rawFirstChild
                 val newFirstChild = MarkdownNodeStable(firstChild.type, content = newContent, children = firstChild.children)
                 modifiedChildren[0] = newFirstChild
 
@@ -1418,7 +1461,8 @@ private fun calculateLayout(
                 itemContent.substring(startIndex)
             } ?: itemContent
             
-            val startPadding = 4f * density.density
+            val listLevel = MarkdownListIndentation.level(content)
+            val startPadding = (4f + listLevel * 16f) * density.density
             val markerEndPadding = 4f * density.density
             
             val textSizePx = with(density) { bodyMediumSize.toPx() }
@@ -1428,7 +1472,13 @@ private fun calculateLayout(
                 normalTypeface,
                 calculateCanvasLetterSpacingEm(bodyMediumSize, globalLetterSpacingSp)
             )
-            val markerPaint = PaintCache.getPaint(textColor, textSizePx, normalTypeface)
+            val markerTint = when (listLevel) {
+                0 -> primaryColor
+                1 -> secondaryColor
+                2 -> tertiaryColor
+                else -> textColor
+            }
+            val markerPaint = PaintCache.getPaint(markerTint, textSizePx, normalTypeface)
             
             // 测量标记宽度
             val markerWidth = markerPaint.measureText("•")
@@ -1441,10 +1491,11 @@ private fun calculateLayout(
                 // 处理子节点列表，去除第一个子节点中的列表标记
                 val modifiedChildren = node.children.toMutableList()
                 val firstChild = modifiedChildren[0]
+                val rawFirstChild = MarkdownListIndentation.stripLeadingIndent(firstChild.content)
                 val newContent = markerMatch?.let {
-                val startIndex = (it.range.last + 1).coerceAtMost(firstChild.content.length)
-                firstChild.content.substring(startIndex)
-            } ?: firstChild.content
+                val startIndex = (it.range.last + 1).coerceAtMost(rawFirstChild.length)
+                rawFirstChild.substring(startIndex)
+            } ?: rawFirstChild
                 val newFirstChild = MarkdownNodeStable(firstChild.type, content = newContent, children = firstChild.children)
                 modifiedChildren[0] = newFirstChild
 

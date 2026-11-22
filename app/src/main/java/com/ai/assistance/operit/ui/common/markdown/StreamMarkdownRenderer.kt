@@ -57,6 +57,7 @@ import com.ai.assistance.operit.ui.common.displays.LatexCache
 import com.ai.assistance.operit.util.markdown.MarkdownNode
 import com.ai.assistance.operit.util.markdown.MarkdownNodeStable
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
+import com.ai.assistance.operit.util.markdown.UniversalMarkdownCompatibility
 import com.ai.assistance.operit.util.markdown.SmartString
 import com.ai.assistance.operit.util.stream.Stream
 import com.ai.assistance.operit.util.stream.StreamInterceptor
@@ -648,6 +649,20 @@ fun StreamMarkdownRenderer(
         } catch (e: Exception) {
             rendererState.streamParsingCompletedSuccessfully = false
             AppLogger.e(TAG, "【流渲染】Markdown流处理异常: ${e.message}", e)
+            // A malformed block produced by any model must never blank the
+            // answer. Preserve every received character as readable text.
+            val fallbackText = rendererState.collectedContent.toString()
+            if (fallbackText.isNotEmpty()) {
+                nodes.clear()
+                nodes.add(
+                    MarkdownNode(
+                        type = MarkdownProcessorType.PLAIN_TEXT,
+                        initialContent = fallbackText
+                    )
+                )
+                xmlNodeStreams.clear()
+                batchUpdater.requestStructuralUpdate()
+            }
         } finally {
             // 移除时间计算变量和日志
             synchronizeRenderNodes(
@@ -885,6 +900,11 @@ fun StreamMarkdownRenderer(
         enableDialogs: Boolean = true,
         fillMaxWidth: Boolean = true,
 ) {
+    // Only normalize completed assistant text. Streaming keeps its existing native
+    // incremental parser; raw ChatMessage.content is never modified.
+    val compatibleContent = remember(content) {
+        UniversalMarkdownCompatibility.normalize(content)
+    }
     // 使用流式版本相同的渲染器ID生成逻辑
     val rendererId = remember(content) { "static-renderer-${content.hashCode()}" }
 
@@ -916,7 +936,8 @@ fun StreamMarkdownRenderer(
         val collectedContentStr = rendererState.collectedContent.toString()
         val streamParsingCompleted = rendererState.streamParsingCompletedSuccessfully
         val shouldReuseExistingNodes =
-            collectedContentStr == content &&
+            compatibleContent == content &&
+                collectedContentStr == content &&
                 areRenderNodesSynchronized(nodes, renderNodes) &&
                 streamParsingCompleted
 
@@ -938,7 +959,7 @@ fun StreamMarkdownRenderer(
 
         launch(Dispatchers.IO) {
             try {
-                val parsedNodes = parseMarkdownToNodes(content)
+                val parsedNodes = parseMarkdownToNodes(compatibleContent)
 
                 // 将解析完成的节点添加到节点列表，并更新动画状态
                 withContext(Dispatchers.Main) {
@@ -951,6 +972,17 @@ fun StreamMarkdownRenderer(
                 throw e
             } catch (e: Exception) {
                 AppLogger.e(TAG, "【静态渲染】解析Markdown内容出错: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    rendererState.replaceStaticNodes(
+                        rendererId,
+                        listOf(
+                            MarkdownNode(
+                                type = MarkdownProcessorType.PLAIN_TEXT,
+                                initialContent = content
+                            )
+                        )
+                    )
+                }
             }
         }
     }
