@@ -66,8 +66,8 @@ async function onSystemPromptCompose(event) {
   const currentPrompt = String(payload.systemPrompt || "");
   if (currentPrompt.indexOf(PROMPT_MARKER) >= 0) return null;
   const protocol = (isEnglish(event) ? PROMPT_EN : PROMPT_ZH);
-  const separator = currentPrompt.trim() ? currentPrompt.replace(/\\s+$/, "") + "\\n\\n" : "";
-  return { systemPrompt: separator + PROMPT_MARKER + "\\n" + protocol };
+  const separator = currentPrompt.trim() ? currentPrompt.replace(/\s+$/, "") + "\n\n" : "";
+  return { systemPrompt: separator + PROMPT_MARKER + "\n" + protocol };
 }
 
 function registerToolPkg() {
